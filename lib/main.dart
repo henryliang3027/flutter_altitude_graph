@@ -2,7 +2,6 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_altitude_graph/altitude_graph.dart';
-import 'package:flutter_altitude_graph/altitude_point_data.dart';
 
 void main() {
   runApp(const MyApp());
@@ -28,55 +27,93 @@ class MyApp extends StatelessWidget {
         // is not restarted.
         primarySwatch: Colors.blue,
       ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
+      home: const MyGraphPage(),
     );
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({Key? key, required this.title}) : super(key: key);
-
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
-
-  final String title;
+class MyGraphPage extends StatelessWidget {
+  const MyGraphPage({Key? key}) : super(key: key);
 
   @override
-  State<MyHomePage> createState() => _MyHomePageState();
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text("Altitude Graph"),
+      ),
+      body: ListView(
+        children: const <Widget>[
+          MyGraph(altitudePointList: [
+            ChartDateValuePair(
+              date: '2022-10-03',
+              point: Offset(0.0, 26.0),
+              value: 26.0,
+            ),
+            ChartDateValuePair(
+              date: '2022-10-04',
+              point: Offset(1.0, 26.34),
+              value: 26.34,
+            ),
+            ChartDateValuePair(
+              date: '2022-10-05',
+              point: Offset(2.0, 26.222),
+              value: 26.222,
+            ),
+          ]),
+          MyGraph(
+            altitudePointList: [
+              ChartDateValuePair(
+                date: '2022-10-03',
+                point: Offset(0.0, 55.0),
+                value: 26.0,
+              ),
+              ChartDateValuePair(
+                date: '2022-10-04',
+                point: Offset(1.0, 47.34),
+                value: 26.34,
+              ),
+              ChartDateValuePair(
+                date: '2022-10-05',
+                point: Offset(2.0, 657.222),
+                value: 26.222,
+              ),
+              ChartDateValuePair(
+                date: '2022-10-05',
+                point: Offset(2.0, 234.222),
+                value: 26.222,
+              ),
+              ChartDateValuePair(
+                date: '2022-10-05',
+                point: Offset(2.0, 34.222),
+                value: 26.222,
+              ),
+            ],
+          )
+        ],
+      ),
+    );
+  }
 }
 
-const List<String> paths = [
-  "assets/raw/HUANQINGHAIHU.json",
-  "assets/raw/CHUANZANGNAN.json",
-  "assets/raw/HUANQINGHAIHU.json",
-  "assets/raw/CHUANZANGNAN.json",
-  "assets/raw/HUANQINGHAIHU.json",
-  "assets/raw/CHUANZANGNAN.json",
-  "assets/raw/HUANQINGHAIHU.json",
-  "assets/raw/CHUANZANGNAN.json",
-  "assets/raw/HUANQINGHAIHU.json",
-  "assets/raw/CHUANZANGNAN.json",
-  "assets/raw/HUANQINGHAIHU.json",
-  "assets/raw/CHUANZANGNAN.json",
-  "assets/raw/HUANQINGHAIHU.json",
-  "assets/raw/CHUANZANGNAN.json",
-  "assets/raw/HUANQINGHAIHU.json",
-  "assets/raw/CHUANZANGNAN.json",
-  "assets/raw/HUANQINGHAIHU.json",
-  "assets/raw/CHUANZANGNAN.json",
-  "assets/raw/HUANQINGHAIHU.json",
-  "assets/raw/CHUANZANGNAN.json",
-];
+class MyGraph extends StatefulWidget {
+  const MyGraph({
+    Key? key,
+    required this.altitudePointList,
+  }) : super(key: key);
 
-class _MyHomePageState extends State<MyHomePage>
-    with SingleTickerProviderStateMixin {
-  late List<AltitudePoint> _altitudePointList;
+  final List<ChartDateValuePair> altitudePointList;
+
+  @override
+  State<MyGraph> createState() => _MyGraphState();
+}
+
+// const List<String> paths = [
+//   "assets/raw/HUANQINGHAIHU_2.json",
+//   "assets/raw/HUANQINGHAIHU.json",
+//   "assets/raw/HUANQINGHAIHU_2.json",
+// ];
+
+class _MyGraphState extends State<MyGraph> with SingleTickerProviderStateMixin {
   double _maxScale = 1.0;
   int dataIndex = 0;
   bool animating = false;
@@ -87,19 +124,28 @@ class _MyHomePageState extends State<MyHomePage>
   void initState() {
     super.initState();
 
-    _altitudePointList = [];
-
     controller =
         AnimationController(vsync: this, duration: const Duration(seconds: 3));
 
     _elasticAnimation =
         CurvedAnimation(parent: controller, curve: const ElasticOutCurve(1.0));
 
-    changeData().then((list) {
-      setState(() {
-        controller.forward();
-      });
+    double miters = widget.altitudePointList.last.point.dx;
+    if (miters > 0) {
+      _maxScale = max(miters / 50.0, 3.0);
+    } else {
+      _maxScale = 3.0;
+    }
+
+    setState(() {
+      controller.forward();
     });
+
+    // changeData().then((list) {
+    //   setState(() {
+    //     controller.forward();
+    //   });
+    // });
   }
 
   @override
@@ -108,55 +154,45 @@ class _MyHomePageState extends State<MyHomePage>
     super.dispose();
   }
 
-  Future<List<AltitudePoint>> changeData() {
-    int a = dataIndex++;
-    return parseGeographyData(paths[a % paths.length]).then((list) {
-      _altitudePointList = list;
+  // Future<List<AltitudePoint>> changeData() {
+  //   int a = dataIndex++;
+  //   return parseGeographyData(paths[a % paths.length]).then((list) {
+  //     _altitudePointList = list;
 
-      double miters = list.last.point.dx;
-      if (miters > 0) {
-        _maxScale = max(miters / 50.0, 1.0);
-      } else {
-        _maxScale = 1.0;
-      }
-      return list;
-    });
-  }
+  //     double miters = list.last.point.dx;
+  //     if (miters > 0) {
+  //       _maxScale = max(miters / 50.0, 1.0);
+  //     } else {
+  //       _maxScale = 1.0;
+  //     }
+  //     return list;
+  //   });
+  // }
 
-  _onRefreshBtnPress() {
-    if (animating) return;
-    animating = true;
+  // _onRefreshBtnPress() {
+  //   if (animating) return;
+  //   animating = true;
 
-    var changeDataFuture = changeData();
-    controller.duration = const Duration(seconds: 1);
-    controller.reverse().then((_) {
-      changeDataFuture.then((_) {
-        setState(() {
-          controller.duration = const Duration(seconds: 3);
-          controller.forward();
-          animating = false;
-        });
-      });
-    });
-  }
+  //   var changeDataFuture = changeData();
+  //   controller.duration = const Duration(seconds: 1);
+  //   controller.reverse().then((_) {
+  //     changeDataFuture.then((_) {
+  //       setState(() {
+  //         controller.duration = const Duration(seconds: 3);
+  //         controller.forward();
+  //         animating = false;
+  //       });
+  //     });
+  //   });
+  // }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text("Altitude Graph"),
-        actions: <Widget>[
-          IconButton(
-            icon: const Icon(
-              Icons.refresh,
-              color: Colors.white,
-            ),
-            onPressed: _onRefreshBtnPress,
-          ),
-        ],
-      ),
-      body: AltitudeGraphView(
-        _altitudePointList,
+    return SizedBox(
+      height: 200,
+      width: double.maxFinite,
+      child: AltitudeGraphView(
+        widget.altitudePointList,
         maxScale: _maxScale,
         animation: _elasticAnimation,
       ),

@@ -19,43 +19,20 @@ const Color kLabelTextColor = Colors.white;
 const Color kAltitudeThumbnailPathColor = Colors.grey;
 const Color kAltitudeThumbnailGradualColor = Color(0xFFE0EFFB);
 
-class AltitudePoint {
-  String name;
+class ChartDateValuePair {
+  const ChartDateValuePair({
+    required this.date,
+    required this.point,
+    required this.value,
+  });
 
-  int level;
-
-  Offset point;
-
-  Color color;
-
-  late TextPainter textPainter;
-
-  AltitudePoint(this.name, this.level, this.point, this.color) {
-    if (name == null || name.isEmpty) return;
-
-    // 向String插入换行符使文字竖向绘制
-    // TODO 这种写法应该是不正确的, 暂时不知道更好的方式
-    var splitMapJoin = name.splitMapJoin('', onNonMatch: (m) {
-      return m.isNotEmpty ? "$m\n" : "";
-    });
-    splitMapJoin = splitMapJoin.substring(0, splitMapJoin.length - 1);
-
-    this.textPainter = TextPainter(
-      textAlign: TextAlign.left,
-      textDirection: TextDirection.ltr,
-      text: TextSpan(
-        text: splitMapJoin,
-        style: TextStyle(
-          color: kLabelTextColor,
-          fontSize: 8.0,
-        ),
-      ),
-    )..layout();
-  }
+  final String date;
+  final Offset point;
+  final double value;
 }
 
 class AltitudeGraphView extends StatefulWidget {
-  final List<AltitudePoint> altitudePointList;
+  final List<ChartDateValuePair> altitudePointList;
   final double maxScale;
   final Color axisLineColor;
   final Color axisTextColor;
@@ -76,7 +53,7 @@ class AltitudeGraphView extends StatefulWidget {
   });
 
   @override
-  AltitudeGraphViewState createState() => new AltitudeGraphViewState();
+  AltitudeGraphViewState createState() => AltitudeGraphViewState();
 }
 
 class AltitudeGraphViewState extends State<AltitudeGraphView>
@@ -124,8 +101,8 @@ class AltitudeGraphViewState extends State<AltitudeGraphView>
 
     _initData();
 
-    widget.animation?.addListener(_onAnimationUpdated);
-    widget.animation?.addStatusListener(_onAnimationStatusChanged);
+    widget.animation.addListener(_onAnimationUpdated);
+    widget.animation.addStatusListener(_onAnimationStatusChanged);
 
     controller =
         AnimationController(vsync: this, duration: Duration(seconds: 3));
@@ -146,10 +123,10 @@ class AltitudeGraphViewState extends State<AltitudeGraphView>
 
     _resetFlingAnim();
 
-    oldWidget.animation?.removeListener(_onAnimationUpdated);
-    widget.animation?.addListener(_onAnimationUpdated);
-    oldWidget.animation?.removeStatusListener(_onAnimationStatusChanged);
-    widget.animation?.addStatusListener(_onAnimationStatusChanged);
+    oldWidget.animation.removeListener(_onAnimationUpdated);
+    widget.animation.addListener(_onAnimationUpdated);
+    oldWidget.animation.removeStatusListener(_onAnimationStatusChanged);
+    widget.animation.addStatusListener(_onAnimationStatusChanged);
 
     // 如果当前缩放大于新的最大缩放, 则调整缩放
     if (_scale != 1.0) {
@@ -175,7 +152,7 @@ class AltitudeGraphViewState extends State<AltitudeGraphView>
       return;
     }
 
-    var value = widget.animation?.value?.clamp(0.0, 1.0) ?? 1.0;
+    var value = widget.animation.value.clamp(0.0, 1.0);
     var newScale = (_lastScale4ReverseAnimation - 1.0) * value + 1.0;
 
     _updateScaleAndScrolling(newScale, context.size!.width / 2);
@@ -184,22 +161,22 @@ class AltitudeGraphViewState extends State<AltitudeGraphView>
   /// 遍历数据, 取得 最高海拔值, 最低海拔值, 最高Level, 最低Level.
   /// 根据最高海拔值和最低海拔值计算出纵轴最大值和最小值.
   _initData() {
-    if (widget.altitudePointList?.isEmpty ?? true) return;
+    if (widget.altitudePointList.isEmpty) return;
 
     var firstPoint = widget.altitudePointList.first.point;
     _maxAltitude = firstPoint.dy;
     _minAltitude = firstPoint.dy;
-    for (AltitudePoint p in widget.altitudePointList) {
+    for (ChartDateValuePair p in widget.altitudePointList) {
       if (p.point.dy > _maxAltitude) {
         _maxAltitude = p.point.dy;
       } else if (p.point.dy < _minAltitude) {
         _minAltitude = p.point.dy;
       }
-      if (p.level > _maxLevel) {
-        _maxLevel = p.level;
-      } else if (p.level < _minLevel) {
-        _minLevel = p.level;
-      }
+      // if (p.level > _maxLevel) {
+      //   _maxLevel = p.level;
+      // } else if (p.level < _minLevel) {
+      //   _minLevel = p.level;
+      // }
     }
 
     var maxDivide = _maxAltitude - _minAltitude;
@@ -212,16 +189,24 @@ class AltitudeGraphViewState extends State<AltitudeGraphView>
     } else if (maxDivide > 10) {
       _maxVerticalAxisValue = (_maxAltitude / 10.0).ceil() * 10.0;
       _minVerticalAxisValue = (_minAltitude / 10.0).floor() * 10.0;
+    } else if (maxDivide >= 0) {
+      _maxVerticalAxisValue = (_maxAltitude * 2.0).ceil() * 1.0;
+      _minVerticalAxisValue = (_minAltitude / 2.0).floor() * 1.0;
+    } else {
+      _maxVerticalAxisValue = (_maxAltitude * 4.0).ceil() * 1.0;
+      _minVerticalAxisValue = (_minAltitude / 4.0).floor() * 1.0;
     }
 
-    _verticalAxisInterval = (_maxVerticalAxisValue - _minVerticalAxisValue) / 5;
+    _verticalAxisInterval = (_maxVerticalAxisValue - _minVerticalAxisValue) / 3;
     var absVerticalAxisInterval = _verticalAxisInterval.abs();
     if (absVerticalAxisInterval > 1000) {
       _verticalAxisInterval = (_verticalAxisInterval / 1000.0).floor() * 1000.0;
     } else if (absVerticalAxisInterval > 100) {
       _verticalAxisInterval = (_verticalAxisInterval / 100.0).floor() * 100.0;
     } else if (absVerticalAxisInterval > 10) {
-      _verticalAxisInterval = (_verticalAxisInterval / 10.0).floor() * 10.0;
+      _verticalAxisInterval = (_verticalAxisInterval / 1.0).floor() * 1.0;
+    } else {
+      _verticalAxisInterval = (_verticalAxisInterval / 1.0).floor() * 1.0;
     }
   }
 
@@ -261,7 +246,7 @@ class AltitudeGraphViewState extends State<AltitudeGraphView>
                         _scale,
                         widget.maxScale,
                         _offsetX,
-                        animatedValue: widget.animation?.value ?? 1.0,
+                        animatedValue: widget.animation.value,
                         maxLevel: _maxLevel,
                         minLevel: _minLevel,
                         axisLineColor: widget.axisLineColor,
@@ -283,13 +268,13 @@ class AltitudeGraphViewState extends State<AltitudeGraphView>
   }
 
   Widget _buildThumbController() {
-    return Container(
+    return SizedBox(
       width: double.infinity,
       height: 48.0,
       child: Stack(
         children: <Widget>[
           // the divider on the top
-          Divider(
+          const Divider(
             height: 1.0,
             color: kSlidingBtnScrimColor,
           ),
@@ -297,14 +282,16 @@ class AltitudeGraphViewState extends State<AltitudeGraphView>
           Container(
             width: double.infinity,
             height: double.infinity,
-            padding: EdgeInsets.only(
-                left: SLIDING_BTN_WIDTH, right: SLIDING_BTN_WIDTH),
+            padding: const EdgeInsets.only(
+              left: SLIDING_BTN_WIDTH,
+              right: SLIDING_BTN_WIDTH,
+            ),
             child: CustomPaint(
               painter: AltitudeThumbnailPainter(
                 widget.altitudePointList,
                 _maxVerticalAxisValue,
                 _minVerticalAxisValue,
-                animatedValue: widget.animation?.value ?? 1.0,
+                animatedValue: widget.animation.value,
               ),
             ),
           ),
@@ -657,7 +644,7 @@ _destroyPictures() {
 
 class AltitudePainter extends CustomPainter {
   // ===== Data
-  List<AltitudePoint> _altitudePointList;
+  List<ChartDateValuePair> _altitudePointList;
 
   int maxLevel;
   int minLevel;
@@ -729,7 +716,7 @@ class AltitudePainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    if (_altitudePointList?.isEmpty ?? true) return;
+    if (_altitudePointList.isEmpty) return;
 
     // 30 是给上下留出的距离, 这样竖轴的最顶端的字就不会被截断, 下方可以用来显示横轴的字
     Size availableSize = Size(size.width, size.height - 30.0);
@@ -860,8 +847,8 @@ class AltitudePainter extends CustomPainter {
 
   void _drawHorizontalAxis(
       Canvas canvas, double viewportWidth, double totalWidth) {
-    Offset? lastPoint = _altitudePointList?.last?.point;
-    if (lastPoint == null) return;
+    Offset? lastPoint = _altitudePointList.last.point;
+    //if (lastPoint == null) return;
 
     double ratio = viewportWidth / totalWidth;
     double intervalAtDistance = lastPoint.dx * ratio / 6.0;
@@ -931,7 +918,7 @@ class AltitudePainter extends CustomPainter {
     // 先绘制渐变再绘制线,避免线被遮挡住
     canvas.drawPath(path, _linePaint);
 
-    _drawLabel(canvas, size.height, pointList, ratioX, ratioY);
+    //_drawLabel(canvas, size.height, pointList, ratioX, ratioY);
   }
 
   void _drawGradualShadow(Path path, Size size, Canvas canvas) {
@@ -942,78 +929,78 @@ class AltitudePainter extends CustomPainter {
     canvas.drawPath(gradualPath, _gradualPaint);
   }
 
-  void _drawLabel(Canvas canvas, double height, List<AltitudePoint> pointList,
-      double ratioX, double ratioY) {
-    // 绘制关键点及文字
-    canvas.save();
-    canvas.translate(0.0, height);
-    double ratioInScaling = _scale / _maxScale * 10.0;
-    for (var p in pointList) {
-      if (p.name == null || p.name.isEmpty) continue;
+  // void _drawLabel(Canvas canvas, double height, List<AltitudePoint> pointList,
+  //     double ratioX, double ratioY) {
+  //   // 绘制关键点及文字
+  //   canvas.save();
+  //   canvas.translate(0.0, height);
+  //   double ratioInScaling = _scale / _maxScale * 10.0;
+  //   for (var p in pointList) {
+  //     //if (p.name == null || p.name.isEmpty) continue;
 
-      // maxLevel
-      double levelLimit =
-          (maxLevel - minLevel) - ratioInScaling * (maxLevel - minLevel);
-      if (p.level < levelLimit) continue;
+  //     // maxLevel
+  //     double levelLimit =
+  //         (maxLevel - minLevel) - ratioInScaling * (maxLevel - minLevel);
+  //     if (p.level < levelLimit) continue;
 
-      double labelScale = p.level - levelLimit;
-      labelScale = (labelScale * 3.0).clamp(0.0, 1.0);
-      // 让Label在跟随动画显示/隐藏, max() 避免为0导致1.0/0报错
-      labelScale = max(labelScale * animatedValue, 0.01);
+  //     double labelScale = p.level - levelLimit;
+  //     labelScale = (labelScale * 3.0).clamp(0.0, 1.0);
+  //     // 让Label在跟随动画显示/隐藏, max() 避免为0导致1.0/0报错
+  //     labelScale = max(labelScale * animatedValue, 0.01);
 
-      // 由于我们不能直接缩放文字的字号, 所以我们采用缩放canvas的方式
-      // canvas缩小后, 面积会增大, 绘制的位置就会变化.
-      // 为了让绘制的点还是在原来的位置, 我们将 ratioX/Y 的值放大 n 倍(n取决于我们将canvas缩小了多少)
-      // 举例: 默认canvas是300 * 500, labelScale=0.5时canvas=600*1000.
-      // 因此我们将 ratioX/Y 放大2倍 (通过 1/0.5 得到), 这样计算偏移量时就能对应上海拔路径的点了.
-      canvas.save();
-      canvas.scale(labelScale);
-      double scale4Offset = (1.0 / labelScale);
-      double scaledRatioX = ratioX * scale4Offset;
-      double scaledRatioY = ratioY * scale4Offset;
+  //     // 由于我们不能直接缩放文字的字号, 所以我们采用缩放canvas的方式
+  //     // canvas缩小后, 面积会增大, 绘制的位置就会变化.
+  //     // 为了让绘制的点还是在原来的位置, 我们将 ratioX/Y 的值放大 n 倍(n取决于我们将canvas缩小了多少)
+  //     // 举例: 默认canvas是300 * 500, labelScale=0.5时canvas=600*1000.
+  //     // 因此我们将 ratioX/Y 放大2倍 (通过 1/0.5 得到), 这样计算偏移量时就能对应上海拔路径的点了.
+  //     canvas.save();
+  //     canvas.scale(labelScale);
+  //     double scale4Offset = (1.0 / labelScale);
+  //     double scaledRatioX = ratioX * scale4Offset;
+  //     double scaledRatioY = ratioY * scale4Offset;
 
-      // 将海拔的值换算成在屏幕上的值
-      double yInScreen =
-          (p.point.dy - _minVerticalAxisValue) * scaledRatioY * animatedValue;
+  //     // 将海拔的值换算成在屏幕上的值
+  //     double yInScreen =
+  //         (p.point.dy - _minVerticalAxisValue) * scaledRatioY * animatedValue;
 
-      // ==== 绘制关键点
-      _signPointPaint.color = p.color;
-      canvas.drawCircle(
-          Offset(p.point.dx * scaledRatioX, -yInScreen), 2.0, _signPointPaint);
+  //     // ==== 绘制关键点
+  //     _signPointPaint.color = p.color;
+  //     canvas.drawCircle(
+  //         Offset(p.point.dx * scaledRatioX, -yInScreen), 2.0, _signPointPaint);
 
-      // ==== 绘制文字及背景
+  //     // ==== 绘制文字及背景
 
-      var tp = p.textPainter;
-      var left = p.point.dx * scaledRatioX - tp.width / 2;
+  //     var tp = p.textPainter;
+  //     var left = p.point.dx * scaledRatioX - tp.width / 2;
 
-      // 如果label接近顶端, 调换方向, 避免label看不见
-      double bgTop = yInScreen + tp.height + 8;
-      double bgBottom = yInScreen + 4;
-      double textTop = yInScreen + tp.height + 6;
-      if (height * scale4Offset - bgTop < 0) {
-        bgTop = yInScreen - tp.height - 8;
-        bgBottom = yInScreen - 4;
-        textTop = yInScreen - 6;
-      }
-      // 绘制文字的背景框
-      canvas.drawRRect(
-          RRect.fromLTRBXY(
-            left - 2,
-            -bgTop,
-            left + tp.width + 2,
-            -bgBottom,
-            tp.width / 2.0,
-            tp.width / 2.0,
-          ),
-          _signPointPaint);
+  //     // 如果label接近顶端, 调换方向, 避免label看不见
+  //     double bgTop = yInScreen + tp.height + 8;
+  //     double bgBottom = yInScreen + 4;
+  //     double textTop = yInScreen + tp.height + 6;
+  //     if (height * scale4Offset - bgTop < 0) {
+  //       bgTop = yInScreen - tp.height - 8;
+  //       bgBottom = yInScreen - 4;
+  //       textTop = yInScreen - 6;
+  //     }
+  //     // 绘制文字的背景框
+  //     canvas.drawRRect(
+  //         RRect.fromLTRBXY(
+  //           left - 2,
+  //           -bgTop,
+  //           left + tp.width + 2,
+  //           -bgBottom,
+  //           tp.width / 2.0,
+  //           tp.width / 2.0,
+  //         ),
+  //         _signPointPaint);
 
-      // 绘制文字
-      tp.paint(canvas, Offset(left, -textTop));
-      canvas.restore();
-    }
+  //     // 绘制文字
+  //     tp.paint(canvas, Offset(left, -textTop));
+  //     canvas.restore();
+  //   }
 
-    canvas.restore();
-  }
+  //   canvas.restore();
+  // }
 
   @override
   bool shouldRepaint(CustomPainter oldDelegate) {
@@ -1048,19 +1035,19 @@ class AltitudePainter extends CustomPainter {
 
 class AltitudeThumbnailPainter extends CustomPainter {
   // ===== Data
-  List<AltitudePoint> _altitudePointList;
+  final List<ChartDateValuePair> _altitudePointList;
 
-  double _maxVerticalAxisValue;
-  double _minVerticalAxisValue;
+  final double _maxVerticalAxisValue;
+  final double _minVerticalAxisValue;
 
   // ===== Paint
-  Paint _linePaint = Paint()
+  final Paint _linePaint = Paint()
     ..color = kAltitudeThumbnailPathColor
     ..isAntiAlias = false
     ..strokeWidth = 0.5
     ..style = PaintingStyle.stroke;
 
-  Paint _gradualPaint = Paint()
+  final Paint _gradualPaint = Paint()
     ..style = PaintingStyle.fill
     ..isAntiAlias = false
     ..color = kAltitudeThumbnailGradualColor;
